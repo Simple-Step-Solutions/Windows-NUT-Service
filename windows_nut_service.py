@@ -57,7 +57,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
 
             if on_battery:
                 self.log_event("UPS is on battery power.", event_id=1002)
-                if self.config["monitor_type"] == "battery_percentage" and battery_level <= self.config["threshold"]:
+                if self.config["monitor_type"] == "battery_percentage" and battery_level <= self.config["shutdown_threshold"]:
                     self.initiate_shutdown("Battery level critical.")
                 elif self.config["monitor_type"] == "time_on_battery":
                     self.log_event("Monitoring time on battery.", event_id=1003)

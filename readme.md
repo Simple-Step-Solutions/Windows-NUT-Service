@@ -1,24 +1,31 @@
 ### Config
 - `nut_server`
-    - The NUT server host.
-    - EX: `localhost`
-- `port`
-    - The NUT server port.
-    - EX: `3493`
-- `user` 
-    - The NUT server username.
-    - EX: `admin`
-- `password`
-    - The NUT server password.
-    - EX: `password123`
+    - `host`
+        - The NUT server host.
+        - EX: `localhost`
+    - `port`
+        - The NUT server port.
+        - EX: `3493`
+    - `user` 
+        - The NUT server username.
+        - EX: `admin`
+    - `password`
+        - The NUT server password.
+        - EX: `password123`
+    - `ups_name`
+        - The name of the UPS to be monitored
+        - EX: `ups`
 - `monitor_type`
     - The monitor type for the service.
     - Options: 
-        - `battery_percentage` - Shutdown will be initiated based on the battery % remaining (value preset).
-        - `time_on_battery` - Shutdown will be initiated based on the time the system has been on battery (`shutdown_delay` confrols the time on battery before shutdown).
+        - `battery_percentage` - Shutdown will be initiated based on the battery % remaining (`shutdown_threshold` controls the percentage before shutting down).
+        - `time_on_battery` - Shutdown will be initiated based on the time the system has been on battery (`shutdown_delay` controls the time on battery before shutdown).
 - `shutdown_delay`
     - The amount of time on battery until the system is shut down in seconds. This is only active if the `monitor_type` is set to `time_on_battery`.
     - EX: `120`
+- `shutdown_threshold`
+    - The percentage threshold before shutting the system down. This is only active if the `monitor_type` is set to `battery_percentage`.
+    - EX: `25`
 - `shutdown_command`
     - The command to run when the system triggers shutdown.
     - EX: `shutdown /s /t 0`
