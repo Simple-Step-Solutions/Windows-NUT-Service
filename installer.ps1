@@ -2,15 +2,15 @@ $ErrorActionPreference = "Stop"
 
 # GitHub repository for scripts
 $RepoUrl = "https://raw.githubusercontent.com/username/repo/branch/"
-$ServiceScriptUrl = "${RepoUrl}windows_ups_service.py"
+$ServiceScriptUrl = "${RepoUrl}windows_nut_service.py"
 $ConfigFileUrl = "${RepoUrl}config.json"
 
 # Define paths
-$PythonInstaller = "https://www.python.org/ftp/python/3.11.6/python-3.11.6-amd64.exe"
-$ScriptDir = "$env:ProgramFiles\UPSMonitor"
-$ServiceScript = Join-Path $ScriptDir "windows_ups_service.py"
+$PythonInstaller = "https://www.python.org/ftp/python/3.13.1/python-3.13.1-amd64.exe"
+$ScriptDir = "$env:ProgramFiles\SimpleStepSolutions\NUTMonitor"
+$ServiceScript = Join-Path $ScriptDir "windows_nut_service.py"
 $ConfigFile = Join-Path $ScriptDir "config.json"
-$PythonPath = "C:\Python311"
+$PythonPath = "C:\Python313"
 
 # Function to log events
 function Write-Event {
@@ -52,7 +52,7 @@ $PipPath = Join-Path $PythonPath "Scripts\pip.exe"
 # Generate service registration script
 $RegisterServiceScript = @"
 import win32serviceutil
-from windows_ups_service import UPSMonitorService
+from windows_nut_service import UPSMonitorService
 
 if __name__ == '__main__':
     win32serviceutil.InstallService(
