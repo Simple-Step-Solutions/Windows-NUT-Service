@@ -1,0 +1,29 @@
+### Config
+- `nut_server`
+    - The NUT server host.
+    - EX: `localhost`
+- `port`
+    - The NUT server port.
+    - EX: `3493`
+- `user` 
+    - The NUT server username.
+    - EX: `admin`
+- `password`
+    - The NUT server password.
+    - EX: `password123`
+- `monitor_type`
+    - The monitor type for the service.
+    - Options: 
+        - `battery_percentage` - Shutdown will be initiated based on the battery % remaining (value preset).
+        - `time_on_battery` - Shutdown will be initiated based on the time the system has been on battery (`shutdown_delay` confrols the time on battery before shutdown).
+- `shutdown_delay`
+    - The amount of time on battery until the system is shut down in seconds. This is only active if the `monitor_type` is set to `time_on_battery`.
+    - EX: `120`
+- `shutdown_command`
+    - The command to run when the system triggers shutdown.
+    - EX: `shutdown /s /t 0`
+- `failsafe_mode`
+    - Determines how the system responds to the NUT server becoming unreachable.
+    - Options:
+        - `failsafe` - The system will initiate a shutdown after determining the NUT server is unreachable.
+        - `faildeadly` - The system will continue to retry after determining the server is unreachable.

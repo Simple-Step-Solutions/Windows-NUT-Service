@@ -1,0 +1,11 @@
+{
+    "nut_server": "localhost",
+    "port": 3493,
+    "user": "admin",
+    "password": "password123",
+    "monitor_type": "time_on_battery",
+    "shutdown_delay": 5,
+    "shutdown_command": "shutdown /s /t 0",
+    "failsafe_mode": "failsafe"
+  }
+  
