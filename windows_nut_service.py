@@ -2,10 +2,24 @@ import json
 import os
 import time
 import win32event
+import win32evtlog
 import win32service
 import win32serviceutil
-from PyNUTClient import PyNUTClient
+import logging
+from PyNUTClient.PyNUT import PyNUTClient
 from win32evtlogutil import ReportEvent
+
+
+logger = logging.getLogger("NUT Service")
+logger.setLevel(logging.DEBUG)
+
+fh = logging.FileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"))
+fh.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+
+logger.addHandler(fh)
 
 class UPSMonitorService(win32serviceutil.ServiceFramework):
     _svc_name_ = "UPSMonitorService"
@@ -23,25 +37,33 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         config_path = os.path.join(os.path.dirname(__file__), "config.json")
         try:
             with open(config_path, "r") as file:
-                return json.load(file)
+                config = json.load(file)
+            self.log_event(f"Config loaded successfully from {config_path}", event_id=1000)
+            return config
         except Exception as e:
-            self.log_event(f"Failed to load configuration: {e}", event_id=1006, event_type=win32event.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Failed to load configuration: {e}", event_id=1006, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
             raise
 
-    def log_event(self, message, event_id=1000, event_type=win32event.EVENTLOG_INFORMATION_TYPE):
+    def log_event(self, message, event_id=1000, event_type=win32evtlog.EVENTLOG_INFORMATION_TYPE):
         ReportEvent(self._svc_name_, event_id, eventType=event_type, strings=[message])
+        if event_type == win32evtlog.EVENTLOG_INFORMATION_TYPE:
+            logger.info(message)
+        elif event_type == win32evtlog.EVENTLOG_ERROR_TYPE:
+            logger.error(message)
+        elif event_type == win32evtlog.EVENTLOG_WARNING_TYPE:
+            logger.warning(message)
 
     def connect_to_nut(self):
         try:
             self.nut_client = PyNUTClient(
                 host=self.config["nut_server"].get("host", "localhost"),
                 port=self.config["nut_server"].get("port", 3493),
-                username=self.config["nut_server"].get("user"),
-                password=self.config["nut_server"].get("password")
+                login=self.config["nut_server"].get("user", "ups"),
+                password=self.config["nut_server"].get("password", "password")
             )
             self.log_event("Connected to NUT server.", event_id=1000)
         except Exception as e:
-            self.log_event(f"Failed to connect to NUT server: {e}", event_id=1001, event_type=win32event.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Failed to connect to NUT server: {e}", event_id=1001, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def monitor_ups(self):
         if not self.nut_client:
@@ -51,7 +73,10 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                 return
 
         try:
-            ups_data = self.nut_client.list_vars(self.config["nut_server"].get("ups_name", "ups"))
+            self.log_event(f"{self.nut_client.GetUPSNames()}")
+            
+            ups_data = self.nut_client.GetUPSVars(self.config["nut_server"].get("ups_name", "ups"))
+            self.log_event(f"ups data: {ups_data}", event_id=1000)
             on_battery = ups_data.get("status", "").lower().startswith("ob")
             battery_level = int(ups_data.get("battery.charge", 100))
 
@@ -65,7 +90,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                     self.initiate_shutdown("Time on battery exceeded threshold.")
 
         except Exception as e:
-            self.log_event(f"Error monitoring UPS: {e}", event_id=1004, event_type=win32event.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Error monitoring UPS: {e}", event_id=1004, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def initiate_shutdown(self, reason):
         self.log_event(f"Initiating shutdown: {reason}", event_id=1005)
