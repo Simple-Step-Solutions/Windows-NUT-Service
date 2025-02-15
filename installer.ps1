@@ -8,7 +8,7 @@ $RequirementsUrl = "${RepoUrl}requirements.txt"
 
 # Define paths
 $PythonInstaller = "https://www.python.org/ftp/python/3.13.1/python-3.13.1-amd64.exe"
-$ScriptDir = "$env:ProgramFiles\SimpleStepSolutions\NUTMonitor"
+$ScriptDir = "$env:ProgramFiles\Simple Step Solutions\NUTMonitor"
 $ServiceScript = Join-Path $ScriptDir "windows_nut_service.py"
 $ConfigFile = Join-Path $ScriptDir "config.json"
 $RequirementsFile = Join-Path $ScriptDir "requirements.txt"
