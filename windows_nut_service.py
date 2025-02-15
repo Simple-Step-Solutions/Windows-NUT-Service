@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 logger = logging.getLogger("NUT Service")
 logger.setLevel(logging.DEBUG)
 
-fh = logging.FileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"))
+fh = logging.handlers.RotatingFileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"), maxBytes=20000, backupCount=1)
 fh.setLevel(logging.DEBUG)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
