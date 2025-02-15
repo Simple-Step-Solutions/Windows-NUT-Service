@@ -1,42 +1,47 @@
 // UPSMonitorService.rc
 //
-// Reference to the compiled message table.
+// Version Information
+#include <windows.h>
+#include <winver.h>
 
 FILEVERSION 1,0,0,0
 PRODUCTVERSION 1,0,0,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
-FILEOS 0x40004
-FILETYPE 0x2
-FILESUBTYPE 0x0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_DLL
+FILESUBTYPE VFT2_UNKNOWN
+
+// StringFileInfo block
+BLOCK "StringFileInfo"
 {
-    BLOCK "StringFileInfo"
+    BLOCK "040904b0"  // Language ID
     {
-        BLOCK "040904b0"
-        {
-            VALUE "CompanyName", "Your Company"
-            VALUE "FileDescription", "UPSMonitorService Message DLL"
-            VALUE "FileVersion", "1.0.0.0"
-            VALUE "InternalName", "UPSMonitorService.dll"
-            VALUE "OriginalFilename", "UPSMonitorService.dll"
-            VALUE "ProductName", "UPSMonitorService"
-            VALUE "ProductVersion", "1.0.0.0"
-        }
-    }
-
-    BLOCK "VarFileInfo"
-    {
-        VALUE "Translation", 0x409, 1200
-    }
-
-    LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-
-    // Link the message file
-    BLOCK "Messages"
-    {
-        LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-        {
-            INCLUDE "UPSMonitorService.mc"
-        }
+        VALUE "CompanyName", "Your Company"
+        VALUE "FileDescription", "UPSMonitorService Message DLL"
+        VALUE "FileVersion", "1.0.0.0"
+        VALUE "InternalName", "UPSMonitorService.dll"
+        VALUE "OriginalFilename", "UPSMonitorService.dll"
+        VALUE "ProductName", "UPSMonitorService"
+        VALUE "ProductVersion", "1.0.0.0"
     }
 }
+
+// VarFileInfo block
+BLOCK "VarFileInfo"
+{
+    VALUE "Translation", 0x409, 1200  // English US
+}
+
+// Message block (if you have the .mc file)
+BLOCK "Messages"
+{
+    LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+    {
+        // This assumes UPSMonitorService.mc exists
+        #include "UPSMonitorService.mc"
+    }
+}
+
+// Language Declaration
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
