@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Visual Studio environment
-        uses: microsoft/setup-msbuild@v1.1
+        uses: microsoft/setup-msbuild@v2
         with:
           vs-version: 'latest'
 
@@ -41,7 +41,7 @@ jobs:
           Move-Item -Path UPSMonitorService.dll -Destination ../dist
 
       - name: Upload DLL Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: UPSMonitorService-DLL
           path: dist/UPSMonitorService.dll
