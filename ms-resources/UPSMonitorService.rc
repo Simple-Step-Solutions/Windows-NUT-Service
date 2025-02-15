@@ -1,0 +1,47 @@
+// UPSMonitorService.rc
+//
+// Version Information
+#include <windows.h>
+#include <winver.h>
+
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_DLL
+FILESUBTYPE VFT2_UNKNOWN
+
+// StringFileInfo block
+BLOCK "StringFileInfo"
+{
+    BLOCK "040904b0"  // Language ID
+    {
+        VALUE "CompanyName", "Simple Step Solutions"
+        VALUE "FileDescription", "UPSMonitorService Message DLL"
+        VALUE "FileVersion", "1.0.0.0"
+        VALUE "InternalName", "UPSMonitorService.dll"
+        VALUE "OriginalFilename", "UPSMonitorService.dll"
+        VALUE "ProductName", "UPSMonitorService"
+        VALUE "ProductVersion", "1.0.0.0"
+    }
+}
+
+// VarFileInfo block
+BLOCK "VarFileInfo"
+{
+    VALUE "Translation", 0x409, 1200  // English US
+}
+
+// Message block (if you have the .mc file)
+BLOCK "Messages"
+{
+    LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+    {
+        // This assumes UPSMonitorService.mc exists
+        #include "UPSMonitorService.mc"
+    }
+}
+
+// Language Declaration
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
