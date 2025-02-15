@@ -1,36 +1,35 @@
 ### Config
 - `nut_server`
-    - `host`
-        - The NUT server host.
-        - EX: `localhost`
-    - `port`
-        - The NUT server port.
-        - EX: `3493`
-    - `user` 
-        - The NUT server username.
-        - EX: `admin`
-    - `password`
-        - The NUT server password.
-        - EX: `password123`
-    - `ups_name`
-        - The name of the UPS to be monitored
-        - EX: `ups`
+  - `host`
+    - The NUT server host.
+    - Example: `localhost`
+  - `port`
+    - The NUT server port.
+    - Example: `3493`
+  - `user`
+    - The NUT server username.
+    - Example: `admin`
+  - `password`
+    - The NUT server password.
+    - Example: `password123`
+  - `ups_name`
+    - The name of the UPS to be monitored.
+    - Example: `ups`
 - `monitor_type`
-    - The monitor type for the service.
-    - Options: 
-        - `battery_percentage` - Shutdown will be initiated based on the battery % remaining (`shutdown_threshold` controls the percentage before shutting down).
-        - `time_on_battery` - Shutdown will be initiated based on the time the system has been on battery (`shutdown_delay` controls the time on battery before shutdown).
-- `shutdown_delay`
-    - The amount of time on battery until the system is shut down in seconds. This is only active if the `monitor_type` is set to `time_on_battery`.
-    - EX: `120`
+  - The monitor type for the service. Determines the criteria that trigger system shutdown.
+  - Options:
+    - `battery_percentage` - Shutdown initiated based on battery percentage (`shutdown_threshold` sets the percentage at which shutdown is triggered).
+    - `time_on_battery` - Shutdown initiated based on the time the UPS has been on battery power (`shutdown_threshold` sets the duration in seconds before shutdown).
 - `shutdown_threshold`
-    - The percentage threshold before shutting the system down. This is only active if the `monitor_type` is set to `battery_percentage`.
-    - EX: `25`
+  - For `battery_percentage`: The percentage threshold before shutting the system down.
+  - For `time_on_battery`: The duration in seconds on battery before the system shuts down.
+  - Example for `battery_percentage`: `25`
+  - Example for `time_on_battery`: `300`
 - `shutdown_command`
-    - The command to run when the system triggers shutdown.
-    - EX: `shutdown /s /t 0`
+  - The command to execute when the system triggers a shutdown.
+  - Example: `shutdown /s /t 0`
 - `failsafe_mode`
-    - Determines how the system responds to the NUT server becoming unreachable.
-    - Options:
-        - `failsafe` - The system will initiate a shutdown after determining the NUT server is unreachable.
-        - `faildeadly` - The system will continue to retry after determining the server is unreachable.
+  - Determines how the system responds if the NUT server becomes unreachable.
+  - Options:
+    - `failsafe` - The system will initiate a shutdown if the NUT server is unreachable.
+    - `faildeadly` - The system will continue attempting to reconnect without shutting down, even if the server is unreachable.

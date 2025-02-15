@@ -8,7 +8,7 @@ import win32serviceutil
 import logging
 from PyNUTClient.PyNUT import PyNUTClient
 from win32evtlogutil import ReportEvent
-
+from datetime import datetime, timedelta
 
 logger = logging.getLogger("NUT Service")
 logger.setLevel(logging.DEBUG)
@@ -21,6 +21,9 @@ fh.setFormatter(formatter)
 
 logger.addHandler(fh)
 
+
+# TODO - Implement failsafe/deadly mode
+# TODO - Implement battery tests
 class UPSMonitorService(win32serviceutil.ServiceFramework):
     _svc_name_ = "UPSMonitorService"
     _svc_display_name_ = "UPS Monitor Service"
@@ -32,6 +35,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         self.config = self.load_config()
         self.nut_client = None
         self.running = True
+        self.battery_start_time = None  # Initialize battery start time
 
     def load_config(self):
         config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -66,28 +70,52 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             self.log_event(f"Failed to connect to NUT server: {e}", event_id=1001, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def monitor_ups(self):
+        # Check if the NUT client is active, if not try to connect
         if not self.nut_client:
             self.connect_to_nut()
             if not self.nut_client:
-                time.sleep(5)  # Retry connection every 5 seconds
+                # Return and try again
+                # TODO - Implement warnings if unable to connect repeatedly 
                 return
 
         try:
-            self.log_event(f"{self.nut_client.GetUPSNames()}")
-            
+            # Get the UPS data
             ups_data = self.nut_client.GetUPSVars(self.config["nut_server"].get("ups_name", "ups"))
-            self.log_event(f"ups data: {ups_data}", event_id=1000)
-            on_battery = ups_data.get("status", "").lower().startswith("ob")
-            battery_level = int(ups_data.get("battery.charge", 100))
+            # Convert byte strings to regular strings
+            ups_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in ups_data.items()}
+            self.log_event(f"UPS data: {ups_data}", event_id=1000)
+            # Get line/battery status
+            on_battery = ups_data.get("ups.status", "OL").lower().startswith("ob")
+            # Get battery level
+            battery_level = int(ups_data.get("battery.charge", "100"))
 
+            # Get current time
+            current_time = datetime.now()
+
+            # Check if on battery
             if on_battery:
                 self.log_event("UPS is on battery power.", event_id=1002)
-                if self.config["monitor_type"] == "battery_percentage" and battery_level <= self.config["shutdown_threshold"]:
-                    self.initiate_shutdown("Battery level critical.")
+                # Check the configured mode
+                if self.config["monitor_type"] == "battery_percentage":
+                    # Check if battery level is lower than threshold
+                    if battery_level <= self.config["shutdown_threshold"]:
+                        self.initiate_shutdown("Battery level critical.")
                 elif self.config["monitor_type"] == "time_on_battery":
-                    self.log_event("Monitoring time on battery.", event_id=1003)
-                    time.sleep(self.config["shutdown_delay"])
-                    self.initiate_shutdown("Time on battery exceeded threshold.")
+                    # Check if the battery start time is set
+                    if self.battery_start_time is None:
+                        self.battery_start_time = current_time
+                        self.log_event(f"Battery mode started at {self.battery_start_time}", event_id=1003)
+                    else:
+                        # Check if the time since entering battery mode has exceeded the threshold
+                        elapsed_time = (current_time - self.battery_start_time).total_seconds()
+                        self.log_event(f"Time on battery: {elapsed_time} seconds", event_id=1004)
+                        if elapsed_time >= self.config["shutdown_threshold"]:
+                            self.initiate_shutdown("Time on battery exceeded threshold.")
+            else:
+                # Check if battery start time is set
+                if self.battery_start_time is not None:
+                    self.log_event(f"UPS returned to online power. Battery was on for {(current_time - self.battery_start_time).total_seconds()} seconds.", event_id=1005)
+                    self.battery_start_time = None  # Reset the timer
 
         except Exception as e:
             self.log_event(f"Error monitoring UPS: {e}", event_id=1004, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)

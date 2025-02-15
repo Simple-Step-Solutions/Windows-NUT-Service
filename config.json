@@ -7,7 +7,7 @@
         "ups_name": "ups"
     },
     "monitor_type": "time_on_battery",
-    "shutdown_delay": 5,
+    "shutdown_threshold": 60,
     "shutdown_command": "shutdown /s /t 0",
     "failsafe_mode": "failsafe"
   }
