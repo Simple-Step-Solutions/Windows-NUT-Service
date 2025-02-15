@@ -1,0 +1,13 @@
+{
+    "nut_server": {
+        "host": "{{NUT_HOST}}",
+        "port": "{{NUT_PORT}}",
+        "user": "{{NUT_USER}}",
+        "password": "{{NUT_PASSWORD}}",
+        "ups_name": "{{UPS_NAME}}"
+    },
+    "monitor_type": "{{MONITOR_TYPE}}",
+    "shutdown_threshold": "{{SHUTDOWN_THRESHOLD}}",
+    "shutdown_command": "{{SHUTDOWN_COMMAND}}",
+    "failsafe_mode": "{{FAILSAFE_MODE}}"
+}
