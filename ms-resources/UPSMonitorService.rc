@@ -17,7 +17,7 @@ BLOCK "StringFileInfo"
 {
     BLOCK "040904b0"  // Language ID
     {
-        VALUE "CompanyName", "Your Company"
+        VALUE "CompanyName", "Simple Step Solutions"
         VALUE "FileDescription", "UPSMonitorService Message DLL"
         VALUE "FileVersion", "1.0.0.0"
         VALUE "InternalName", "UPSMonitorService.dll"
