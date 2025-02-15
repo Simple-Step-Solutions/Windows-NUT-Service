@@ -21,9 +21,6 @@ jobs:
         with:
           vs-version: 'latest'
 
-      - name: Install Windows SDK (if necessary)
-        # The latest Windows runners should have the SDK installed. If not, install it here.
-
       - name: Compile Message Files
         shell: pwsh
         run: |
