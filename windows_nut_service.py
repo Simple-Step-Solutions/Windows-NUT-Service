@@ -9,18 +9,19 @@ import logging
 from PyNUTClient.PyNUT import PyNUTClient
 from win32evtlogutil import ReportEvent
 from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger("NUT Service")
 logger.setLevel(logging.DEBUG)
 
-fh = logging.handlers.RotatingFileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"), maxBytes=20000, backupCount=1)
-fh.setLevel(logging.DEBUG)
+fh = RotatingFileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"), maxBytes=20000, backupCount=1)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 
 logger.addHandler(fh)
 
+logger.info("SETUP LOGGER")
 
 # TODO - Implement failsafe/deadly mode
 # TODO - Implement battery tests
@@ -83,7 +84,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             ups_data = self.nut_client.GetUPSVars(self.config["nut_server"].get("ups_name", "ups"))
             # Convert byte strings to regular strings
             ups_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in ups_data.items()}
-            self.log_event(f"UPS data: {ups_data}", event_id=1000)
+            logger.info(f"UPS data: {ups_data}", event_id=1000)
             # Get line/battery status
             on_battery = ups_data.get("ups.status", "OL").lower().startswith("ob")
             # Get battery level
