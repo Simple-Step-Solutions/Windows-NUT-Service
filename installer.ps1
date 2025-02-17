@@ -3,13 +3,14 @@ $ErrorActionPreference = "Stop"
 # GitHub repository for scripts
 $RepoUrl = "https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/"
 $ServiceScriptUrl = "${RepoUrl}windows_nut_service.py"
-$ConfigFileUrl = "${RepoUrl}config.json"
+$ConfigTemplateFileUrl = "${RepoUrl}config.template.json"
 $RequirementsUrl = "${RepoUrl}requirements.txt"
 
 # Define paths
 $PythonInstaller = "https://www.python.org/ftp/python/3.13.1/python-3.13.1-amd64.exe"
 $ScriptDir = "$env:ProgramFiles\Simple Step Solutions\NUTMonitor"
 $ServiceScript = Join-Path $ScriptDir "windows_nut_service.py"
+$ConfigTemplateFile = Join-Path $ScriptDir "config.template.json"
 $ConfigFile = Join-Path $ScriptDir "config.json"
 $RequirementsFile = Join-Path $ScriptDir "requirements.txt"
 $PythonPath = "$env:ProgramFiles\Python313"
@@ -20,6 +21,56 @@ function Write-Event {
         [string]$Message
     )
     Write-Host $Message
+}
+
+function Write-NewConfig {
+    param ()
+
+    Write-Event "Generate Config"
+
+    # Read the template content
+    $templateContent = Get-Content -Path $ConfigTemplateFile -Raw
+
+    # Create a hashtable mapping placeholders to environment variables
+    $envVars = @{
+        "{{NUT_HOST}}"           = $env:nutServerHost
+        "{{NUT_PORT}}"           = $env:nutServerPort
+        "{{NUT_USER}}"           = $env:nutServerUsername
+        "{{NUT_PASSWORD}}"       = $env:nutServerPassword
+        "{{UPS_NAME}}"           = $env:nutServerUpsName
+        "{{MONITOR_TYPE}}"       = $env:monitorType
+        "{{SHUTDOWN_THRESHOLD}}" = $env:shutdownThreshold
+        "{{SHUTDOWN_COMMAND}}"   = $env:shutdownCommand
+        "{{FAILSAFE_MODE}}"      = $env:failsafeMode
+    }
+
+    # Replace each placeholder with the corresponding environment variable
+    foreach ($key in $envVars.Keys) {
+        $value = $envVars[$key]
+    
+        # If the value is not set, you might want to handle it (e.g., throw an error or set a default)
+        if ($null -eq $value) {
+            throw "Environment variable for $key is not set."
+        }
+    
+        # Replace the placeholder in the template
+        $templateContent = $templateContent -replace [regex]::Escape($key), $value
+    }
+
+    # Convert numeric values appropriately
+    # Assuming NUT_PORT and SHUTDOWN_THRESHOLD should be integers
+    $templateContent = $templateContent -replace '"{{NUT_PORT}}"', $env:NUT_PORT
+    $templateContent = $templateContent -replace '"{{SHUTDOWN_THRESHOLD}}"', $env:SHUTDOWN_THRESHOLD
+
+    # Optionally, you can perform JSON validation
+    try {
+        $json = $templateContent | ConvertFrom-Json
+        $json | ConvertTo-Json -Depth 10 | Out-File -FilePath $ConfigFile -Encoding UTF8
+        Write-Event "Configuration file generated at $ConfigFile"
+    }
+    catch {
+        Write-Event "Failed to generate configuration file: $_"
+    }
 }
 
 # Create service directory if it doesn't exist
@@ -33,7 +84,12 @@ Invoke-WebRequest -Uri $ServiceScriptUrl -OutFile $ServiceScript
 
 # Download the configuration file
 Write-Event "Downloading configuration file..."
-Invoke-WebRequest -Uri $ConfigFileUrl -OutFile $ConfigFile
+Invoke-WebRequest -Uri $ConfigTemplateFileUrl -OutFile $ConfigTemplateFile
+
+# Generate the config if not already found
+if (-Not (Test-Path $ConfigFile)) {
+    Write-NewConfig
+}
 
 # Download the requirement file
 Write-Event "Downloading requirements file..."
