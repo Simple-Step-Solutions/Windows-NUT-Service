@@ -74,7 +74,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             self.connect_to_nut()
             if not self.nut_client:
                 # Return and try again
-                # TODO - Implement warnings if unable to connect repeatedly 
+                # TODO - Implement warnings if unable to connect repeatedly
                 return
 
         try:
@@ -116,6 +116,12 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                     self.log_event(f"UPS returned to online power. Battery was on for {(current_time - self.battery_start_time).total_seconds()} seconds.", event_id=1005)
                     self.battery_start_time = None  # Reset the timer
 
+        except OSError as e:
+            if e.errno == 10053:
+                self.log_event("Connection to NUT server was aborted. Attempting to reconnect on next cycle.", event_id=1007, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
+                self.nut_client = None # Force a reconnect on the next cycle
+            else:
+                self.log_event(f"An OS error occurred while monitoring UPS: {e}", event_id=1008, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
         except Exception as e:
             self.log_event(f"Error monitoring UPS: {e}", event_id=1004, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
