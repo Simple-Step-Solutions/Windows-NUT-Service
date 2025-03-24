@@ -10,11 +10,12 @@ from PyNUTClient.PyNUT import PyNUTClient
 from win32evtlogutil import ReportEvent
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
+import socket  # Import the socket module
 
 logger = logging.getLogger("NUT Service")
 logger.setLevel(logging.DEBUG)
 
-fh = RotatingFileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"), maxBytes=2000000, backupCount=1)
+fh = RotatingFileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"), maxBytes=20000000, backupCount=1)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -41,10 +42,10 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         try:
             with open(config_path, "r") as file:
                 config = json.load(file)
-            self.log_event(f"Config loaded successfully from {config_path}", event_id=1000)
+            self.log_event(f"Config loaded successfully from {config_path}", event_id=1010)
             return config
         except Exception as e:
-            self.log_event(f"Failed to load configuration: {e}", event_id=1006, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Failed to load configuration: {e}", event_id=1011, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
             raise
 
     def log_event(self, message, event_id=1000, event_type=win32evtlog.EVENTLOG_INFORMATION_TYPE):
@@ -64,9 +65,9 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                 login=self.config["nut_server"].get("user", "ups"),
                 password=self.config["nut_server"].get("password", "password")
             )
-            self.log_event("Connected to NUT server.", event_id=1000)
+            self.log_event("Connected to NUT server.", event_id=1020)
         except Exception as e:
-            self.log_event(f"Failed to connect to NUT server: {e}", event_id=1001, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Failed to connect to NUT server: {e}", event_id=1021, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def monitor_ups(self):
         # Check if the NUT client is active, if not try to connect
@@ -93,7 +94,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
 
             # Check if on battery
             if on_battery:
-                self.log_event("UPS is on battery power.", event_id=1002)
+                self.log_event("UPS is on battery power.", event_id=1030)
                 # Check the configured mode
                 if self.config["monitor_type"] == "battery_percentage":
                     # Check if battery level is lower than threshold
@@ -103,35 +104,35 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                     # Check if the battery start time is set
                     if self.battery_start_time is None:
                         self.battery_start_time = current_time
-                        self.log_event(f"Battery mode started at {self.battery_start_time}", event_id=1003)
+                        self.log_event(f"Battery mode started at {self.battery_start_time}", event_id=1031)
                     else:
                         # Check if the time since entering battery mode has exceeded the threshold
                         elapsed_time = (current_time - self.battery_start_time).total_seconds()
-                        self.log_event(f"Time on battery: {elapsed_time} seconds", event_id=1004)
+                        self.log_event(f"Time on battery: {elapsed_time} seconds", event_id=1032)
                         if elapsed_time >= self.config["shutdown_threshold"]:
                             self.initiate_shutdown("Time on battery exceeded threshold.")
             else:
                 # Check if battery start time is set
                 if self.battery_start_time is not None:
-                    self.log_event(f"UPS returned to online power. Battery was on for {(current_time - self.battery_start_time).total_seconds()} seconds.", event_id=1005)
+                    self.log_event(f"UPS returned to online power. Battery was on for {(current_time - self.battery_start_time).total_seconds()} seconds.", event_id=1033)
                     self.battery_start_time = None  # Reset the timer
 
         except OSError as e:
             if e.errno == 10053:
-                self.log_event("Connection to NUT server was aborted. Attempting to reconnect on next cycle.", event_id=1007, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
+                self.log_event("Connection to NUT server was aborted. Attempting to reconnect on next cycle.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
                 self.nut_client = None # Force a reconnect on the next cycle
             else:
-                self.log_event(f"An OS error occurred while monitoring UPS: {e}", event_id=1008, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+                self.log_event(f"An OS error occurred while monitoring UPS: {e}", event_id=1041, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
         except Exception as e:
-            self.log_event(f"Error monitoring UPS: {e}", event_id=1004, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Error monitoring UPS: {e}", event_id=1042, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def initiate_shutdown(self, reason):
-        self.log_event(f"Initiating shutdown: {reason}", event_id=1005)
+        self.log_event(f"Initiating shutdown: {reason}", event_id=1050)
         shutdown_command = self.config.get("shutdown_command", "shutdown /s /t 0")
         os.system(shutdown_command)
 
     def SvcDoRun(self):
-        self.log_event("Service started.", event_id=1000)
+        self.log_event("Service started.", event_id=1001)
         while self.running:
             self.monitor_ups()
             time.sleep(5)  # Prevent high CPU usage
@@ -139,7 +140,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
     def SvcStop(self):
         self.running = False
         win32event.SetEvent(self.stop_event)
-        self.log_event("Service stopped.", event_id=1000)
+        self.log_event("Service stopped.", event_id=1002)
 
 if __name__ == "__main__":
     win32serviceutil.HandleCommandLine(UPSMonitorService)
