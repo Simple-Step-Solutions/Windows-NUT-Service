@@ -10,7 +10,6 @@ from PyNUTClient.PyNUT import PyNUTClient
 from win32evtlogutil import ReportEvent
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
-import socket  # Import the socket module
 
 logger = logging.getLogger("NUT Service")
 logger.setLevel(logging.DEBUG)
