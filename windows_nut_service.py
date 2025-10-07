@@ -55,6 +55,8 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             logger.error(message)
         elif event_type == win32evtlog.EVENTLOG_WARNING_TYPE:
             logger.warning(message)
+        else:
+            logger.debug(message)
 
     def connect_to_nut(self):
         try:
