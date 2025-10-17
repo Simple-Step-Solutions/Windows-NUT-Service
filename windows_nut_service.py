@@ -120,7 +120,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
 
         except OSError as e:
             if e.errno in [10053, 10054]:
-                self.log_event("Connection to NUT server was aborted. Attempting to reconnect on next cycle.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
+                self.log_event(f"Connection to NUT server lost (Error {e.errno}). Attempting to reconnect on next cycle.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
                 self.nut_client = None # Force a reconnect on the next cycle
             else:
                 self.log_event(f"An OS error occurred while monitoring UPS: {e}", event_id=1041, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
@@ -136,12 +136,18 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         self.log_event("Service started.", event_id=1001)
         while self.running:
             self.monitor_ups()
-            time.sleep(5)  # Prevent high CPU usage
+            # Wait for 5 seconds or until the stop event is signalled.
+            wait_result = win32event.WaitForSingleObject(self.stop_event, 5000)
+            # If the stop event was signalled, the loop will exit.
+            if wait_result == win32event.WAIT_OBJECT_0:
+                break
 
     def SvcStop(self):
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         self.running = False
         win32event.SetEvent(self.stop_event)
         self.log_event("Service stopped.", event_id=1002)
+        self.ReportServiceStatus(win32service.SERVICE_STOPPED)
 
 if __name__ == "__main__":
     win32serviceutil.HandleCommandLine(UPSMonitorService)
