@@ -119,7 +119,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                     self.battery_start_time = None  # Reset the timer
 
         except OSError as e:
-            if e.errno == 10053:
+            if e.errno in [10053, 10054]:
                 self.log_event("Connection to NUT server was aborted. Attempting to reconnect on next cycle.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
                 self.nut_client = None # Force a reconnect on the next cycle
             else:
