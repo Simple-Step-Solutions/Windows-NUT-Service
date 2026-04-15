@@ -50,6 +50,27 @@ jobs:
 
           Write-Host "Build succeeded: NUTMonitorMessages.dll"
 
+      - name: Scan DLL with Windows Defender
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          # Update signatures before scanning so we're not running stale definitions
+          Write-Host "Updating Windows Defender signatures..."
+          $defender = "C:\Program Files\Windows Defender\MpCmdRun.exe"
+          & $defender -SignatureUpdate
+          # Signature update can return non-zero if already up to date — not fatal
+          Write-Host "Signature update exit code: $LASTEXITCODE"
+
+          Write-Host "Scanning NUTMonitorMessages.dll..."
+          $dllPath = Resolve-Path "NUTMonitorMessages.dll"
+          & $defender -Scan -ScanType 3 -File "$dllPath"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows Defender scan FAILED (exit code $LASTEXITCODE) — DLL will not be committed."
+          }
+          Write-Host "Scan passed: no threats detected."
+
       - name: Commit DLL to repository
         shell: pwsh
         run: |
