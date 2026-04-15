@@ -175,9 +175,15 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         self.log_event("Service started.", event_id=1001)
         while self.running:
             self.monitor_ups()
-            time.sleep(5)  # Prevent high CPU usage
+            # Block for up to 5 seconds or until the stop event is signaled,
+            # whichever comes first. This lets SvcStop wake us up immediately
+            # instead of waiting out a full sleep cycle.
+            win32event.WaitForSingleObject(self.stop_event, 5000)
 
     def SvcStop(self):
+        # Tell the SCM we received the stop request and are working on it.
+        # Without this, the SCM assumes the service is hung and fails the stop.
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         self.running = False
         win32event.SetEvent(self.stop_event)
         self.log_event("Service stopped.", event_id=1002)

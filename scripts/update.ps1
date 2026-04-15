@@ -25,8 +25,18 @@ function Write-Event {
 # Check if the service exists
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
     Write-Event "Stopping the UPS Monitor Service..."
-    Stop-Service -Name $ServiceName
-    
+    # Use -ErrorAction SilentlyContinue so a slow/hung stop doesn't abort the
+    # whole update. We follow up with Stop-Process as a fallback.
+    Stop-Service -Name $ServiceName -ErrorAction SilentlyContinue -NoWait
+    $deadline = (Get-Date).AddSeconds(15)
+    while ((Get-Service -Name $ServiceName).Status -ne "Stopped" -and (Get-Date) -lt $deadline) {
+        Start-Sleep 1
+    }
+    if ((Get-Service -Name $ServiceName).Status -ne "Stopped") {
+        Write-Event "Service did not stop gracefully — killing process..."
+        Get-Process | Where-Object { $_.MainModule.FileName -like "*pythonservice*" -or $_.CommandLine -like "*windows_nut_service*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+
     Write-Event "Uninstalling the old service..."
     & "$PythonPath\python.exe" $ServiceScript remove
 } else {
