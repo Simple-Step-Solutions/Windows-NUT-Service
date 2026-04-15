@@ -56,12 +56,19 @@ jobs:
           Set-StrictMode -Version Latest
           $ErrorActionPreference = "Stop"
 
+          $defender = "C:\Program Files\Windows Defender\MpCmdRun.exe"
+
           # Update signatures before scanning so we're not running stale definitions
           Write-Host "Updating Windows Defender signatures..."
-          $defender = "C:\Program Files\Windows Defender\MpCmdRun.exe"
           & $defender -SignatureUpdate
           # Signature update can return non-zero if already up to date — not fatal
           Write-Host "Signature update exit code: $LASTEXITCODE"
+
+          # GitHub Actions runners exclude the workspace directory from Defender
+          # by default to avoid build interference. Remove that exclusion so the
+          # scan isn't silently skipped.
+          Write-Host "Removing workspace Defender exclusion..."
+          Remove-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE
 
           Write-Host "Scanning NUTMonitorMessages.dll..."
           $dllPath = Resolve-Path "NUTMonitorMessages.dll"
