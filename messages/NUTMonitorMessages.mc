@@ -11,6 +11,18 @@
 
 MessageIdTypedef=DWORD
 
+; Explicitly declare Success (0x0) as the only severity so mc.exe does not
+; apply the default Informational bit (0x40000000) to compiled message IDs.
+; Without this, MessageId=1020 compiles to 0x400003FC instead of 0x000003FC,
+; causing a mismatch with the raw IDs passed to ReportEvent.
+SeverityNames=(
+    Success=0x0:STATUS_SEVERITY_SUCCESS
+)
+
+FacilityNames=(
+    Application=0x0:FACILITY_APPLICATION
+)
+
 LanguageNames=(English=0x0409:MSG00001)
 
 ; ---------------------------------------------------------------
