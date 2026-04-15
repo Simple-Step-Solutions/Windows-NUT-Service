@@ -1,65 +1,143 @@
-### Config
-- `nut_server`
-  - `host`
-    - The NUT server host.
-    - Example: `localhost`
-  - `port`
-    - The NUT server port.
-    - Example: `3493`
-  - `user`
-    - The NUT server username.
-    - Example: `admin`
-  - `password`
-    - The NUT server password.
-    - Example: `password123`
-  - `ups_name`
-    - The name of the UPS to be monitored.
-    - Example: `ups`
-- `monitor_type`
-  - The monitor type for the service. Determines the criteria that trigger system shutdown.
-  - Options:
-    - `battery_percentage` - Shutdown initiated based on battery percentage (`shutdown_threshold` sets the percentage at which shutdown is triggered).
-    - `time_on_battery` - Shutdown initiated based on the time the UPS has been on battery power (`shutdown_threshold` sets the duration in seconds before shutdown).
-- `shutdown_threshold`
-  - For `battery_percentage`: The percentage threshold before shutting the system down.
-  - For `time_on_battery`: The duration in seconds on battery before the system shuts down.
-  - Example for `battery_percentage`: `25`
-  - Example for `time_on_battery`: `300`
-- `shutdown_command`
-  - The command to execute when the system triggers a shutdown.
-  - Example: `shutdown /s /t 0`
-- `failsafe_mode`
-  - Determines how the system responds if the NUT server becomes unreachable.
-  - Options:
-    - `failsafe` - The system will initiate a shutdown if the NUT server is unreachable.
-    - `faildeadly` - The system will continue attempting to reconnect without shutting down, even if the server is unreachable.
+# Windows NUT Service
 
-### Event ID Reference
+A Windows service that monitors a [Network UPS Tools (NUT)](https://networkupstools.org/) server and initiates a graceful system shutdown when configured thresholds are met — protecting your machine from unexpected power loss.
 
-The service uses the following Event IDs to log specific events to the Windows Event Log. The IDs are organized into ranges for easier management and future additions:
+## Overview
 
-**Service Lifecycle (1000-1009):**
-* **1001**: Information - Service started successfully.
-* **1002**: Information - Service stopped successfully.
+This is useful when your Windows machine is protected by a UPS managed by a NUT server running elsewhere (e.g., a Synology NAS, Linux box, or Raspberry Pi). The service polls the NUT server on a configurable interval and shuts down Windows when the UPS has been on battery too long or the battery charge drops below a set threshold.
 
-**Configuration (1010-1019):**
-* **1010**: Information - Config loaded successfully from [path].
-* **1011**: Error - Failed to load configuration: [error message].
+## Requirements
 
-**NUT Server Connection (1020-1029):**
-* **1020**: Information - Connected to NUT server.
-* **1021**: Error - Failed to connect to NUT server: [error message].
+- Windows 10/11 or Windows Server 2016+
+- A running NUT server reachable over the network
+- Python 3.13 (installed automatically by the install script)
 
-**UPS Monitoring (1030-1039):**
-* **1030**: Information - UPS is on battery power.
-* **1031**: Information - Battery mode started at [timestamp].
-* **1032**: Information - Time on battery: [seconds] seconds.
-* **1033**: Information - UPS returned to online power. Battery was on for [seconds] seconds.
+## Installation
 
-**Connection Errors (1040-1049):**
-* **1040**: Warning - Connection to NUT server was aborted. Attempting to reconnect on next cycle.
-* **1041**: Error - An OS error occurred while monitoring UPS: [error message].
-* **1042**: Error - Error monitoring UPS: [error message].
+Run the following in an **elevated (Administrator) PowerShell** prompt:
 
-**Shutdown (1050-1059):**
-* **1050**: Information - Initiating shutdown: [reason].
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+irm https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/scripts/install.ps1 | iex
+```
+
+The script will:
+1. Install Python 3.13 if not already present at `%ProgramFiles%\Python313`
+2. Install required Python packages (`pywin32`, `pynutclient`)
+3. Copy the service files to `%ProgramFiles%\Simple Step Solutions\NUTMonitor`
+4. Drop a `config.json` template into that directory
+5. Register and start the `UPSMonitorService` Windows service
+
+**After installation, edit `config.json` before the service can function correctly** — the template contains placeholder values.
+
+## Configuration
+
+Edit `%ProgramFiles%\Simple Step Solutions\NUTMonitor\config.json`:
+
+```json
+{
+    "nut_server": {
+        "host": "192.168.1.10",
+        "port": 3493,
+        "user": "upsmon",
+        "password": "secret",
+        "ups_name": "ups"
+    },
+    "monitor_type": "time_on_battery",
+    "shutdown_threshold": 300,
+    "shutdown_command": "shutdown /s /t 0",
+    "failsafe_mode": "failsafe"
+}
+```
+
+### Options
+
+| Key | Description |
+|-----|-------------|
+| `nut_server.host` | Hostname or IP of your NUT server |
+| `nut_server.port` | NUT server port (default: `3493`) |
+| `nut_server.user` | NUT username |
+| `nut_server.password` | NUT password |
+| `nut_server.ups_name` | Name of the UPS as configured in NUT (default: `ups`) |
+| `monitor_type` | `battery_percentage` or `time_on_battery` |
+| `shutdown_threshold` | For `battery_percentage`: charge % to trigger shutdown. For `time_on_battery`: seconds on battery before shutdown. |
+| `shutdown_command` | Command to run when shutting down (default: `shutdown /s /t 0`) |
+| `failsafe_mode` | `failsafe` — shut down if NUT server is unreachable. `faildeadly` — keep running and keep retrying. |
+
+After editing the config, restart the service:
+
+```powershell
+Restart-Service UPSMonitorService
+```
+
+## Updating
+
+Run in an elevated PowerShell prompt:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+irm https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/scripts/update.ps1 | iex
+```
+
+This stops the service, downloads the latest service script, updates Python packages, and restarts the service. Your `config.json` is preserved.
+
+## Uninstalling
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+irm https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/scripts/uninstall.ps1 | iex
+```
+
+To keep your config when uninstalling:
+
+```powershell
+$env:keepSettings = "true"
+# then run the uninstall script above
+```
+
+To keep Python installed:
+
+```powershell
+$env:keepPython = "true"
+```
+
+## Logs
+
+The service writes a rotating log file to:
+
+```
+%ProgramFiles%\Simple Step Solutions\NUTMonitor\NUT Service.log
+```
+
+Max size is 20 MB with one backup file kept.
+
+Events are also written to the **Windows Application Event Log** under the source `UPSMonitorService`.
+
+## Event ID Reference
+
+| Range | Category |
+|-------|----------|
+| 1000–1009 | Service lifecycle |
+| 1010–1019 | Configuration |
+| 1020–1029 | NUT server connection |
+| 1030–1039 | UPS monitoring |
+| 1040–1049 | Connection errors |
+| 1050–1059 | Shutdown |
+
+| ID | Level | Message |
+|----|-------|---------|
+| 1001 | Info | Service started |
+| 1002 | Info | Service stopped |
+| 1010 | Info | Config loaded successfully |
+| 1011 | Error | Failed to load configuration |
+| 1020 | Info | Connected to NUT server |
+| 1021 | Error | Failed to connect to NUT server |
+| 1030 | Info | UPS is on battery power |
+| 1031 | Info | Battery mode started |
+| 1032 | Info | Time on battery (seconds) |
+| 1033 | Info | UPS returned to online power |
+| 1040 | Warning | NUT server connection aborted, will retry |
+| 1041 | Error | OS error during UPS monitoring |
+| 1042 | Error | General error during UPS monitoring |
+| 1050 | Info | Initiating shutdown |
+| 1051 | Error | Shutdown command failed |

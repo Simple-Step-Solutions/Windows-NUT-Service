@@ -1,13 +1,14 @@
 import json
 import os
+import subprocess
 import time
 import win32event
 import win32evtlog
 import win32service
 import win32serviceutil
+import servicemanager
 import logging
 from PyNUTClient.PyNUT import PyNUTClient
-from win32evtlogutil import ReportEvent
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 
@@ -34,7 +35,9 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         self.config = self.load_config()
         self.nut_client = None
         self.running = True
-        self.battery_start_time = None  # Initialize battery start time
+        self.battery_start_time = None
+        self.shutdown_initiated = False
+        self.next_reconnect_attempt = None  # Cooldown timer for reconnect attempts
 
     def load_config(self):
         config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -48,17 +51,22 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             raise
 
     def log_event(self, message, event_id=1000, event_type=win32evtlog.EVENTLOG_INFORMATION_TYPE):
-        ReportEvent(self._svc_name_, event_id, eventType=event_type, strings=[message])
         if event_type == win32evtlog.EVENTLOG_INFORMATION_TYPE:
+            servicemanager.LogInfoMsg(message)
             logger.info(message)
         elif event_type == win32evtlog.EVENTLOG_ERROR_TYPE:
+            servicemanager.LogErrorMsg(message)
             logger.error(message)
         elif event_type == win32evtlog.EVENTLOG_WARNING_TYPE:
+            servicemanager.LogWarningMsg(message)
             logger.warning(message)
         else:
             logger.debug(message)
 
     def connect_to_nut(self):
+        # Enforce reconnect cooldown to avoid hammering an unreachable server
+        if self.next_reconnect_attempt and datetime.now() < self.next_reconnect_attempt:
+            return
         try:
             self.nut_client = PyNUTClient(
                 host=self.config["nut_server"].get("host", "localhost"),
@@ -66,9 +74,11 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                 login=self.config["nut_server"].get("user", "ups"),
                 password=self.config["nut_server"].get("password", "password")
             )
+            self.next_reconnect_attempt = None
             self.log_event("Connected to NUT server.", event_id=1020)
         except Exception as e:
-            self.log_event(f"Failed to connect to NUT server: {e}", event_id=1021, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.next_reconnect_attempt = datetime.now() + timedelta(seconds=30)
+            self.log_event(f"Failed to connect to NUT server: {e}. Will retry in 30 seconds.", event_id=1021, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
 
     def monitor_ups(self):
         # Check if the NUT client is active, if not try to connect
@@ -96,6 +106,9 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             # Check if on battery
             if on_battery:
                 self.log_event("UPS is on battery power.", event_id=1030)
+                if self.shutdown_initiated:
+                    # Already kicked off a shutdown — stop hammering the command
+                    return
                 # Check the configured mode
                 if self.config["monitor_type"] == "battery_percentage":
                     # Check if battery level is lower than threshold
@@ -116,21 +129,25 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                 # Check if battery start time is set
                 if self.battery_start_time is not None:
                     self.log_event(f"UPS returned to online power. Battery was on for {(current_time - self.battery_start_time).total_seconds()} seconds.", event_id=1033)
-                    self.battery_start_time = None  # Reset the timer
+                    self.battery_start_time = None
+                    self.shutdown_initiated = False  # Reset so shutdown can trigger again next time
 
         except OSError as e:
-            if e.errno in [10053, 10054]:
-                self.log_event("Connection to NUT server was aborted. Attempting to reconnect on next cycle.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
-                self.nut_client = None # Force a reconnect on the next cycle
-            else:
-                self.log_event(f"An OS error occurred while monitoring UPS: {e}", event_id=1041, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.nut_client = None  # Connection is broken — force reconnect on next cycle
+            self.next_reconnect_attempt = datetime.now() + timedelta(seconds=30)
+            self.log_event(f"Network error communicating with NUT server (errno {e.errno}): {e}. Will reconnect in 30 seconds.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
         except Exception as e:
-            self.log_event(f"Error monitoring UPS: {e}", event_id=1042, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.nut_client = None  # Unknown error — treat connection as broken
+            self.next_reconnect_attempt = datetime.now() + timedelta(seconds=30)
+            self.log_event(f"Error monitoring UPS: {e}. Will reconnect in 30 seconds.", event_id=1042, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def initiate_shutdown(self, reason):
+        self.shutdown_initiated = True
         self.log_event(f"Initiating shutdown: {reason}", event_id=1050)
         shutdown_command = self.config.get("shutdown_command", "shutdown /s /t 0")
-        os.system(shutdown_command)
+        result = subprocess.run(shutdown_command, shell=True)
+        if result.returncode != 0:
+            self.log_event(f"Shutdown command failed with exit code {result.returncode}: {shutdown_command}", event_id=1051, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
     def SvcDoRun(self):
         self.log_event("Service started.", event_id=1001)

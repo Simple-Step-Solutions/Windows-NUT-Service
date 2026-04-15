@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 # GitHub repository for scripts
 $RepoUrl = "https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/"
 $ServiceScriptUrl = "${RepoUrl}windows_nut_service.py"
-$ConfigFileUrl = "${RepoUrl}config.json"
+$ConfigTemplateUrl = "${RepoUrl}config.template.json"
 $RequirementsUrl = "${RepoUrl}requirements.txt"
 
 # Define paths
@@ -31,9 +31,14 @@ if (-Not (Test-Path $ScriptDir)) {
 Write-Event "Downloading service script..."
 Invoke-WebRequest -Uri $ServiceScriptUrl -OutFile $ServiceScript
 
-# Download the configuration file
-Write-Event "Downloading configuration file..."
-Invoke-WebRequest -Uri $ConfigFileUrl -OutFile $ConfigFile
+# Download the configuration template (only if config.json doesn't already exist)
+if (-Not (Test-Path $ConfigFile)) {
+    Write-Event "Downloading configuration template..."
+    Invoke-WebRequest -Uri $ConfigTemplateUrl -OutFile $ConfigFile
+    Write-Event "Config template saved to $ConfigFile — edit this file to set your NUT server details before starting the service."
+} else {
+    Write-Event "Existing config.json found, skipping download."
+}
 
 # Download the requirement file
 Write-Event "Downloading requirements file..."
