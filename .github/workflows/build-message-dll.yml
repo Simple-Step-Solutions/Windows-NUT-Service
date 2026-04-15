@@ -64,17 +64,21 @@ jobs:
           # Signature update can return non-zero if already up to date — not fatal
           Write-Host "Signature update exit code: $LASTEXITCODE"
 
-          # GitHub Actions runners exclude the workspace directory from Defender
-          # by default to avoid build interference. Remove that exclusion so the
-          # scan isn't silently skipped.
-          Write-Host "Removing workspace Defender exclusion..."
-          Remove-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE
+          # GitHub Actions runners exclude the entire D:\a\ tree from Defender
+          # to avoid interference with builds. Copy the DLL to C:\ (never
+          # excluded) so the scan actually runs rather than being skipped.
+          $scanDir    = "C:\DefenderScan"
+          $scanTarget = "$scanDir\NUTMonitorMessages.dll"
+          New-Item -ItemType Directory -Path $scanDir -Force | Out-Null
+          Copy-Item (Resolve-Path "NUTMonitorMessages.dll") $scanTarget
 
           Write-Host "Scanning NUTMonitorMessages.dll..."
-          $dllPath = Resolve-Path "NUTMonitorMessages.dll"
-          & $defender -Scan -ScanType 3 -File "$dllPath"
-          if ($LASTEXITCODE -ne 0) {
-            throw "Windows Defender scan FAILED (exit code $LASTEXITCODE) — DLL will not be committed."
+          & $defender -Scan -ScanType 3 -File $scanTarget
+          $scanResult = $LASTEXITCODE
+          Remove-Item $scanDir -Recurse -Force
+
+          if ($scanResult -ne 0) {
+            throw "Windows Defender scan FAILED (exit code $scanResult) — DLL will not be committed."
           }
           Write-Host "Scan passed: no threats detected."
 
