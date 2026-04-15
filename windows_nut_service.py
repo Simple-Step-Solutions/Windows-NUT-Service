@@ -6,7 +6,7 @@ import win32event
 import win32evtlog
 import win32service
 import win32serviceutil
-import servicemanager
+import win32evtlogutil
 import logging
 from PyNUTClient.PyNUT import PyNUTClient
 from datetime import datetime, timedelta
@@ -51,14 +51,12 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             raise
 
     def log_event(self, message, event_id=1000, event_type=win32evtlog.EVENTLOG_INFORMATION_TYPE):
+        win32evtlogutil.ReportEvent(self._svc_name_, event_id, eventType=event_type, strings=[message])
         if event_type == win32evtlog.EVENTLOG_INFORMATION_TYPE:
-            servicemanager.LogInfoMsg(message)
             logger.info(message)
         elif event_type == win32evtlog.EVENTLOG_ERROR_TYPE:
-            servicemanager.LogErrorMsg(message)
             logger.error(message)
         elif event_type == win32evtlog.EVENTLOG_WARNING_TYPE:
-            servicemanager.LogWarningMsg(message)
             logger.warning(message)
         else:
             logger.debug(message)
@@ -149,7 +147,31 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         if result.returncode != 0:
             self.log_event(f"Shutdown command failed with exit code {result.returncode}: {shutdown_command}", event_id=1051, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
 
+    def _register_event_source(self):
+        """Register the event source with our compiled message DLL.
+
+        pywin32's service installer registers the source pointing to python.exe,
+        which has no Win32 message resources, causing blank Message fields in
+        PowerShell Get-WinEvent and Event Viewer. We re-register here at startup
+        to point to NUTMonitorMessages.dll (built by the GitHub Actions workflow
+        and deployed alongside this script), which contains a %1 pass-through
+        template for every event ID we use.
+
+        Falls back to EventCreate.exe if the DLL isn't present — messages will
+        still be non-empty (Windows includes the insertion strings in the
+        "description not found" text) but will have an ugly preamble.
+        """
+        dll_path = os.path.join(os.path.dirname(__file__), "NUTMonitorMessages.dll")
+        if not os.path.exists(dll_path):
+            logger.warning("NUTMonitorMessages.dll not found — falling back to EventCreate.exe for event source registration. Messages will display with a 'description not found' prefix.")
+            dll_path = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "EventCreate.exe")
+        try:
+            win32evtlogutil.AddSourceToRegistry(self._svc_name_, msgDLL=dll_path, eventLogType="Application")
+        except Exception as e:
+            logger.warning(f"Could not register event source: {e}")
+
     def SvcDoRun(self):
+        self._register_event_source()
         self.log_event("Service started.", event_id=1001)
         while self.running:
             self.monitor_ups()

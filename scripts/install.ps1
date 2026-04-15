@@ -4,15 +4,17 @@ $ErrorActionPreference = "Stop"
 $RepoUrl = "https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/"
 $ServiceScriptUrl = "${RepoUrl}windows_nut_service.py"
 $ConfigTemplateUrl = "${RepoUrl}config.template.json"
-$RequirementsUrl = "${RepoUrl}requirements.txt"
+$RequirementsUrl   = "${RepoUrl}requirements.txt"
+$MessageDllUrl     = "${RepoUrl}NUTMonitorMessages.dll"
 
 # Define paths
 $PythonInstaller = "https://www.python.org/ftp/python/3.13.1/python-3.13.1-amd64.exe"
-$ScriptDir = "$env:ProgramFiles\Simple Step Solutions\NUTMonitor"
-$ServiceScript = Join-Path $ScriptDir "windows_nut_service.py"
-$ConfigFile = Join-Path $ScriptDir "config.json"
+$ScriptDir       = "$env:ProgramFiles\Simple Step Solutions\NUTMonitor"
+$ServiceScript   = Join-Path $ScriptDir "windows_nut_service.py"
+$ConfigFile      = Join-Path $ScriptDir "config.json"
 $RequirementsFile = Join-Path $ScriptDir "requirements.txt"
-$PythonPath = "$env:ProgramFiles\Python313"
+$MessageDll      = Join-Path $ScriptDir "NUTMonitorMessages.dll"
+$PythonPath      = "$env:ProgramFiles\Python313"
 
 # Function to log events
 function Write-Event {
@@ -30,6 +32,10 @@ if (-Not (Test-Path $ScriptDir)) {
 # Download the Python service script
 Write-Event "Downloading service script..."
 Invoke-WebRequest -Uri $ServiceScriptUrl -OutFile $ServiceScript
+
+# Download the message DLL (used by the Windows Event Log source for clean message display)
+Write-Event "Downloading event log message DLL..."
+Invoke-WebRequest -Uri $MessageDllUrl -OutFile $MessageDll
 
 # Download the configuration template (only if config.json doesn't already exist)
 if (-Not (Test-Path $ConfigFile)) {

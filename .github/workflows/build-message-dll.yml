@@ -1,0 +1,65 @@
+name: Build Message DLL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'messages/NUTMonitorMessages.mc'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Sets up the MSVC developer environment so mc.exe, rc.exe, and link.exe
+      # are all on PATH without needing to hard-code SDK version paths.
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile message file
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          $mc  = "mc.exe"
+          $rc  = "rc.exe"
+          $lnk = "link.exe"
+
+          # mc.exe  → NUTMonitorMessages.rc + MSG00001.bin + NUTMonitorMessages.h
+          # -U      → Unicode message table (recommended for modern Windows)
+          # -r/-h   → output directory for .rc/.bin and .h respectively
+          & $mc -U messages/NUTMonitorMessages.mc -r messages/ -h messages/
+          if ($LASTEXITCODE -ne 0) { throw "mc.exe failed with exit code $LASTEXITCODE" }
+
+          # rc.exe → NUTMonitorMessages.res
+          & $rc messages/NUTMonitorMessages.rc
+          if ($LASTEXITCODE -ne 0) { throw "rc.exe failed with exit code $LASTEXITCODE" }
+
+          # link.exe → NUTMonitorMessages.dll
+          # /DLL     → build a DLL
+          # /NOENTRY → no entry point (message-only DLL, no code)
+          # /MACHINE → target architecture
+          & $lnk /DLL /NOENTRY /MACHINE:X64 /OUT:NUTMonitorMessages.dll messages/NUTMonitorMessages.res
+          if ($LASTEXITCODE -ne 0) { throw "link.exe failed with exit code $LASTEXITCODE" }
+
+          Write-Host "Build succeeded: NUTMonitorMessages.dll"
+
+      - name: Commit DLL to repository
+        shell: pwsh
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add NUTMonitorMessages.dll
+          $changed = git diff --staged --quiet; $LASTEXITCODE
+          if ($changed -ne 0) {
+            git commit -m "Build: update NUTMonitorMessages.dll from ${{ github.sha }}"
+            git push
+          } else {
+            Write-Host "DLL unchanged, nothing to commit."
+          }

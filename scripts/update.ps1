@@ -3,14 +3,16 @@ $ErrorActionPreference = "Stop"
 # GitHub repository for scripts
 $RepoUrl = "https://raw.githubusercontent.com/Simple-Step-Solutions/Windows-NUT-Service/main/"
 $ServiceScriptUrl = "${RepoUrl}windows_nut_service.py"
-$RequirementsUrl = "${RepoUrl}requirements.txt"
+$RequirementsUrl   = "${RepoUrl}requirements.txt"
+$MessageDllUrl     = "${RepoUrl}NUTMonitorMessages.dll"
 
 # Define paths
-$ScriptDir = "$env:ProgramFiles\Simple Step Solutions\NUTMonitor"
-$ServiceScript = Join-Path $ScriptDir "windows_nut_service.py"
+$ScriptDir        = "$env:ProgramFiles\Simple Step Solutions\NUTMonitor"
+$ServiceScript    = Join-Path $ScriptDir "windows_nut_service.py"
 $RequirementsFile = Join-Path $ScriptDir "requirements.txt"
-$PythonPath = "$env:ProgramFiles\Python313"
-$ServiceName = "UPSMonitorService"
+$MessageDll       = Join-Path $ScriptDir "NUTMonitorMessages.dll"
+$PythonPath       = "$env:ProgramFiles\Python313"
+$ServiceName      = "UPSMonitorService"
 
 # Function to log events
 function Write-Event {
@@ -35,6 +37,10 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
 # Download the latest Python service script
 Write-Event "Downloading latest service script..."
 Invoke-WebRequest -Uri $ServiceScriptUrl -OutFile $ServiceScript
+
+# Download the latest message DLL
+Write-Event "Downloading latest event log message DLL..."
+Invoke-WebRequest -Uri $MessageDllUrl -OutFile $MessageDll
 
 # Download the latest requirement file
 Write-Event "Downloading latest requirements file..."
