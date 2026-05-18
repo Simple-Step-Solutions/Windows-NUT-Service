@@ -10,12 +10,18 @@ import win32evtlogutil
 import logging
 from PyNUTClient.PyNUT import PyNUTClient
 from datetime import datetime, timedelta
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 
 logger = logging.getLogger("NUT Service")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
-fh = RotatingFileHandler(os.path.join(os.path.dirname(__file__), f"NUT Service.log"), maxBytes=20000000, backupCount=1)
+# Rotate daily at midnight, keep 14 days of history
+fh = TimedRotatingFileHandler(
+    os.path.join(os.path.dirname(__file__), "NUT Service.log"),
+    when="midnight",
+    backupCount=14,
+    encoding="utf-8",
+)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -38,6 +44,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         self.battery_start_time = None
         self.shutdown_initiated = False
         self.next_reconnect_attempt = None  # Cooldown timer for reconnect attempts
+        self.last_heartbeat = None  # For periodic "still running" log entries
 
     def load_config(self):
         config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -50,16 +57,19 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             self.log_event(f"Failed to load configuration: {e}", event_id=1011, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
             raise
 
-    def log_event(self, message, event_id=1000, event_type=win32evtlog.EVENTLOG_INFORMATION_TYPE):
-        win32evtlogutil.ReportEvent(self._svc_name_, event_id, eventType=event_type, strings=[message])
+    def log_event(self, message, event_id=1000, event_type=win32evtlog.EVENTLOG_INFORMATION_TYPE, exc_info=False):
+        try:
+            win32evtlogutil.ReportEvent(self._svc_name_, event_id, eventType=event_type, strings=[message])
+        except Exception as e:
+            logger.warning(f"Failed to write to Windows Event Log: {e}")
         if event_type == win32evtlog.EVENTLOG_INFORMATION_TYPE:
-            logger.info(message)
+            logger.info(message, exc_info=exc_info)
         elif event_type == win32evtlog.EVENTLOG_ERROR_TYPE:
-            logger.error(message)
+            logger.error(message, exc_info=exc_info)
         elif event_type == win32evtlog.EVENTLOG_WARNING_TYPE:
-            logger.warning(message)
+            logger.warning(message, exc_info=exc_info)
         else:
-            logger.debug(message)
+            logger.debug(message, exc_info=exc_info)
 
     def connect_to_nut(self):
         # Enforce reconnect cooldown to avoid hammering an unreachable server
@@ -70,13 +80,14 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                 host=self.config["nut_server"].get("host", "localhost"),
                 port=self.config["nut_server"].get("port", 3493),
                 login=self.config["nut_server"].get("user", "ups"),
-                password=self.config["nut_server"].get("password", "password")
+                password=self.config["nut_server"].get("password", "password"),
+                timeout=15,
             )
             self.next_reconnect_attempt = None
             self.log_event("Connected to NUT server.", event_id=1020)
         except Exception as e:
             self.next_reconnect_attempt = datetime.now() + timedelta(seconds=30)
-            self.log_event(f"Failed to connect to NUT server: {e}. Will retry in 30 seconds.", event_id=1021, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
+            self.log_event(f"Failed to connect to NUT server: {e}. Will retry in 30 seconds.", event_id=1021, event_type=win32evtlog.EVENTLOG_WARNING_TYPE, exc_info=True)
 
     def monitor_ups(self):
         # Check if the NUT client is active, if not try to connect
@@ -92,7 +103,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
             ups_data = self.nut_client.GetUPSVars(self.config["nut_server"].get("ups_name", "ups"))
             # Convert byte strings to regular strings
             ups_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in ups_data.items()}
-            logger.info(f"UPS data: {ups_data}")
+            logger.debug(f"UPS data: {ups_data}")
             # Get line/battery status
             on_battery = ups_data.get("ups.status", "OL").lower().startswith("ob")
             # Get battery level
@@ -108,11 +119,13 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                     # Already kicked off a shutdown — stop hammering the command
                     return
                 # Check the configured mode
-                if self.config["monitor_type"] == "battery_percentage":
+                monitor_type = self.config.get("monitor_type", "battery_percentage")
+                shutdown_threshold = self.config.get("shutdown_threshold", 20)
+                if monitor_type == "battery_percentage":
                     # Check if battery level is lower than threshold
-                    if battery_level <= self.config["shutdown_threshold"]:
+                    if battery_level <= shutdown_threshold:
                         self.initiate_shutdown("Battery level critical.")
-                elif self.config["monitor_type"] == "time_on_battery":
+                elif monitor_type == "time_on_battery":
                     # Check if the battery start time is set
                     if self.battery_start_time is None:
                         self.battery_start_time = current_time
@@ -121,7 +134,7 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
                         # Check if the time since entering battery mode has exceeded the threshold
                         elapsed_time = (current_time - self.battery_start_time).total_seconds()
                         self.log_event(f"Time on battery: {elapsed_time} seconds", event_id=1032)
-                        if elapsed_time >= self.config["shutdown_threshold"]:
+                        if elapsed_time >= shutdown_threshold:
                             self.initiate_shutdown("Time on battery exceeded threshold.")
             else:
                 # Check if battery start time is set
@@ -133,11 +146,11 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
         except OSError as e:
             self.nut_client = None  # Connection is broken — force reconnect on next cycle
             self.next_reconnect_attempt = datetime.now() + timedelta(seconds=30)
-            self.log_event(f"Network error communicating with NUT server (errno {e.errno}): {e}. Will reconnect in 30 seconds.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE)
+            self.log_event(f"Network error communicating with NUT server (errno {e.errno}): {e}. Will reconnect in 30 seconds.", event_id=1040, event_type=win32evtlog.EVENTLOG_WARNING_TYPE, exc_info=True)
         except Exception as e:
             self.nut_client = None  # Unknown error — treat connection as broken
             self.next_reconnect_attempt = datetime.now() + timedelta(seconds=30)
-            self.log_event(f"Error monitoring UPS: {e}. Will reconnect in 30 seconds.", event_id=1042, event_type=win32evtlog.EVENTLOG_ERROR_TYPE)
+            self.log_event(f"Error monitoring UPS: {e}. Will reconnect in 30 seconds.", event_id=1042, event_type=win32evtlog.EVENTLOG_ERROR_TYPE, exc_info=True)
 
     def initiate_shutdown(self, reason):
         self.shutdown_initiated = True
@@ -173,12 +186,30 @@ class UPSMonitorService(win32serviceutil.ServiceFramework):
     def SvcDoRun(self):
         self._register_event_source()
         self.log_event("Service started.", event_id=1001)
-        while self.running:
-            self.monitor_ups()
-            # Block for up to 5 seconds or until the stop event is signaled,
-            # whichever comes first. This lets SvcStop wake us up immediately
-            # instead of waiting out a full sleep cycle.
-            win32event.WaitForSingleObject(self.stop_event, 5000)
+        self.last_heartbeat = datetime.now()
+        try:
+            while self.running:
+                try:
+                    self.monitor_ups()
+                except Exception as e:
+                    # Catch anything monitor_ups didn't handle so the service
+                    # loop keeps running instead of crashing silently.
+                    logger.error(f"Unhandled exception in monitor loop: {e}", exc_info=True)
+
+                # Log a heartbeat once per hour so we can tell the service is
+                # still alive even when nothing interesting is happening.
+                now = datetime.now()
+                if (now - self.last_heartbeat).total_seconds() >= 3600:
+                    logger.info("Service heartbeat: still running.")
+                    self.last_heartbeat = now
+
+                # Block for up to 5 seconds or until the stop event is signaled,
+                # whichever comes first. This lets SvcStop wake us up immediately
+                # instead of waiting out a full sleep cycle.
+                win32event.WaitForSingleObject(self.stop_event, 5000)
+        except Exception as e:
+            logger.critical(f"Fatal error in service main loop — service is stopping: {e}", exc_info=True)
+            raise
 
     def SvcStop(self):
         # Tell the SCM we received the stop request and are working on it.
